@@ -22,11 +22,34 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.example.android.trackmysleepquality.R
 import com.example.android.trackmysleepquality.database.SleepNight
 import com.example.android.trackmysleepquality.databinding.ListItemSleepNightBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.lang.ClassCastException
 
-class SleepNightAdapter(val clickListener: SleepNightListener) : ListAdapter<SleepNight,
-        SleepNightAdapter.ViewHolder>(SleepNightDiffCallback()) {
+private val ITEM_VIEW_TYPE_HEADER = 0
+private val ITEM_VIEW_TYPE_ITEM = 1
+
+class SleepNightAdapter(val clickListener: SleepNightListener) : ListAdapter<DataItem,
+        RecyclerView.ViewHolder>(SleepNightDiffCallback()) {
+
+    private val adapterScope = CoroutineScope(Dispatchers.Default)
+
+    fun addHeaderAndSubmitList(list: List<SleepNight>?) {
+        adapterScope.launch {
+            val items = when (list) {
+                null -> listOf(DataItem.Header)
+                else -> listOf(DataItem.Header) + list.map { DataItem.SleepNightItem(it) }
+            }
+            withContext(Dispatchers.Main) {
+                submitList(items)
+            }
+        }
+    }
 
     /**
      * Called by RecyclerView to display the data at the specified position. This method should
@@ -49,10 +72,13 @@ class SleepNightAdapter(val clickListener: SleepNightListener) : ListAdapter<Sle
      * item at the given position in the data set.
      * @param position The position of the item within the adapter's data set.
      */
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val item = getItem(position)
-
-        holder.bind(clickListener, item)
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (holder) {
+            is ViewHolder -> {
+                val nightItem = getItem(position) as DataItem.SleepNightItem
+                holder.bind(clickListener, nightItem.sleepNight)
+            }
+        }
     }
 
     /**
@@ -78,9 +104,42 @@ class SleepNightAdapter(val clickListener: SleepNightListener) : ListAdapter<Sle
      * @see .getItemViewType
      * @see .onBindViewHolder
      */
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        //To change body of created functions use File | Settings | File Templates.
-        return ViewHolder.from(parent)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        return when (viewType) {
+            ITEM_VIEW_TYPE_HEADER -> TextViewHolder.from(parent)
+            ITEM_VIEW_TYPE_ITEM -> ViewHolder.from(parent)
+            else -> throw ClassCastException("Unknown viewType ${viewType}")
+        }
+    }
+
+    class TextViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        companion object {
+            fun from(parent: ViewGroup): TextViewHolder {
+                val layoutInflater = LayoutInflater.from(parent.context)
+                val view = layoutInflater.inflate(R.layout.header, parent, false)
+                return TextViewHolder(view)
+            }
+        }
+    }
+
+    /**
+     * Return the view type of the item at `position` for the purposes
+     * of view recycling.
+     *
+     *
+     * The default implementation of this method returns 0, making the assumption of
+     * a single view type for the adapter. Unlike ListView adapters, types need not
+     * be contiguous. Consider using id resources to uniquely identify item view types.
+     *
+     * @param position position to query
+     * @return integer value identifying the type of the view needed to represent the item at
+     * `position`. Type codes need not be contiguous.
+     */
+    override fun getItemViewType(position: Int): Int {
+        return when (getItem(position)) {
+            is DataItem.Header -> ITEM_VIEW_TYPE_HEADER
+            is DataItem.SleepNightItem -> ITEM_VIEW_TYPE_ITEM
+        }
     }
 
     class ViewHolder private constructor(val binding: ListItemSleepNightBinding)
@@ -112,7 +171,7 @@ class SleepNightAdapter(val clickListener: SleepNightListener) : ListAdapter<Sle
  * Used by ListAdapter to calculate the minumum number of changes between and old list and a new
  * list that's been passed to `submitList`.
  */
-class SleepNightDiffCallback : DiffUtil.ItemCallback<SleepNight>() {
+class SleepNightDiffCallback : DiffUtil.ItemCallback<DataItem>() {
     /**
      * Called to check whether two objects represent the same item.
      *
@@ -130,8 +189,8 @@ class SleepNightDiffCallback : DiffUtil.ItemCallback<SleepNight>() {
      *
      * @see Callback.areItemsTheSame
      */
-    override fun areItemsTheSame(oldItem: SleepNight, newItem: SleepNight): Boolean {
-        return oldItem.nightId == newItem.nightId
+    override fun areItemsTheSame(oldItem: DataItem, newItem: DataItem): Boolean {
+        return oldItem.id == newItem.id
     }
 
     /**
@@ -163,7 +222,7 @@ class SleepNightDiffCallback : DiffUtil.ItemCallback<SleepNight>() {
      *
      * @see Callback.areContentsTheSame
      */
-    override fun areContentsTheSame(oldItem: SleepNight, newItem: SleepNight): Boolean {
+    override fun areContentsTheSame(oldItem: DataItem, newItem: DataItem): Boolean {
         // This works because SleepNight is a data class.
         // Using == on a data class compares the value of every property of it.
         return oldItem == newItem
@@ -172,4 +231,16 @@ class SleepNightDiffCallback : DiffUtil.ItemCallback<SleepNight>() {
 
 class SleepNightListener(val clickListener: (sleepId: Long) -> Unit) {
     fun onClick(night: SleepNight) = clickListener(night.nightId)
+}
+
+sealed class DataItem {
+    data class SleepNightItem(val sleepNight: SleepNight) : DataItem() {
+        override val id = sleepNight.nightId
+    }
+
+    object Header : DataItem() {
+        override val id = Long.MIN_VALUE
+    }
+
+    abstract val id: Long
 }
