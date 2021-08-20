@@ -1,3 +1,6 @@
+Starter code was taken from Udacity repository:
+https://github.com/udacity/andfun-kotlin-sleep-tracker-with-recyclerview/tree/starter-code
+
 # RecyclerView - SleepQualityTracker with RecyclerView app
 
 This is the toy app for Lesson 7 of the [Android App Development in Kotlin course on Udacity](https://classroom.udacity.com/courses/ud9012/).
